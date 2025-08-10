@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Lockfiles (volitelně – vyber si jeden správce balíčků)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Editor/OS
+.DS_Store
+.idea/
+.vscode/
+
+# Env
+.env
+.env.*
