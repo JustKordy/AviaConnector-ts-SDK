@@ -33,11 +33,12 @@ server.on("status", (s: { message: string }) => {
   console.log("[status]", s.message);
 });
 
+
 server.on("flightData", (fd: any) => {
   console.log(
     "[flightData]",
-    "IAS:", fd?.speed?.iasKts ?? "-",
-    "ALT:", fd?.position?.altFt ?? "-"
+    "on ground:", fd?.on_ground ?? "-",
+    "ALT:", fd?.heading ?? "-"
   );
 });
 
