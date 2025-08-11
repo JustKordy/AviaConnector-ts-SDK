@@ -1,7 +1,7 @@
 {
   "name": "@justkordy/avia-connector-sdk",
-  "version": "0.1.0",
-  "description": "TypeScript SDK for AviaConnector WebSocket API",
+  "version": "0.2.0",
+  "description": "Server-only TypeScript SDK that accepts WebSocket connections from AviaConnector clients.",
   "license": "MIT",
   "author": "JustKordy",
   "type": "module",
@@ -20,11 +20,20 @@
     "build": "tsup src/index.ts --dts --format esm,cjs --sourcemap --clean",
     "clean": "rimraf dist"
   },
-  "dependencies": {},
+  "peerDependencies": {
+    "ws": "^8.18.0"
+  },
+  "peerDependenciesMeta": {
+    "ws": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.10",
     "rimraf": "^6.0.0",
     "tsup": "^8.0.1",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "ws": "^8.18.0"
   }
 }

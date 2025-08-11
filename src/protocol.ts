@@ -1,20 +1,18 @@
-import type { MessageEnvelope, EventMap, EventName } from "./types";
+import type { MessageEnvelope } from "./types";
 
-/**
- * Default JSON parser: expects { type: string, data?: unknown, ts?, seq? }.
- * Replace by passing a custom parseMessage in client options to match the exact server protocol.
- */
-export function defaultParseMessage(raw: string | ArrayBuffer | Buffer): MessageEnvelope {
-  let text: string;
-  if (typeof raw === "string") {
-    text = raw;
-  } else if (raw instanceof ArrayBuffer) {
-    text = new TextDecoder().decode(new Uint8Array(raw));
-  } else {
-    // Node Buffer
-    text = raw.toString("utf8");
+// Convert ws RawData (Buffer | ArrayBuffer | Buffer[] | string) to string
+function rawToString(raw: any): string {
+  if (typeof raw === "string") return raw;
+  if (Array.isArray(raw)) {
+    return Buffer.concat(raw.map((b) => Buffer.isBuffer(b) ? b : Buffer.from(b))).toString("utf8");
   }
+  if (Buffer.isBuffer(raw)) return raw.toString("utf8");
+  if (raw instanceof ArrayBuffer) return Buffer.from(raw).toString("utf8");
+  return String(raw);
+}
 
+export function defaultParseMessage(raw: any): MessageEnvelope {
+  const text = rawToString(raw);
   try {
     const obj = JSON.parse(text);
     if (obj && typeof obj.type === "string") {
@@ -24,24 +22,4 @@ export function defaultParseMessage(raw: string | ArrayBuffer | Buffer): Message
   } catch {
     return { type: "raw", data: text };
   }
-}
-
-/**
- * Narrow an envelope to a typed event payload if type matches.
- */
-export function narrowEvent<K extends EventName>(
-  env: MessageEnvelope,
-  type: K
-): env is MessageEnvelope<EventMap[K]> & { type: K } {
-  return env?.type === type;
-}
-
-/**
- * Narrow an envelope to a typed event AND guarantees data is present (non-null/undefined).
- */
-export function narrowEventWithData<K extends EventName>(
-  env: MessageEnvelope,
-  type: K
-): env is MessageEnvelope<NonNullable<EventMap[K]>> & { type: K; data: NonNullable<EventMap[K]> } {
-  return env?.type === type && env?.data != null;
 }

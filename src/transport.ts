@@ -71,10 +71,8 @@ export class WebSocketTransport {
     this.ws = new WS(this.opts.url, this.opts.protocols as any);
     this.installHandlers(this.ws);
   }
-
-  private installHandlers(ws: WebSocket) {
+private installHandlers(ws: WebSocket) {
     ws.addEventListener?.("open", this.handleOpen);
-    // @ts-ignore node ws uses 'on'
     if (!ws.addEventListener && (ws as any).on) {
       (ws as any).on("open", this.handleOpen);
     }
@@ -91,6 +89,40 @@ export class WebSocketTransport {
     ws.addEventListener?.("close", closeH);
     (ws as any).on?.("close", closeH);
   }
+
+  // Accept both browser CloseEvent and node-ws (code, reason) signature
+  private handleClose = (...args: any[]) => {
+    this.clearIdleCheck();
+
+    let code: number | undefined;
+    let reason: string | undefined;
+
+    if (args.length === 1 && args[0] && typeof args[0] === "object" && "code" in args[0]) {
+      code = (args[0] as any).code;
+      reason = (args[0] as any).reason?.toString?.();
+    } else {
+      code = args[0];
+      reason = args[1]?.toString?.();
+    }
+
+    this.emit("close", code, reason);
+
+    if (!this.closedByUser && this.opts.autoReconnect) {
+      this.emit("reconnect_attempt", this.reconnectDelay);
+      setTimeout(() => {
+        try {
+          this.open();
+          this.emit("reconnected");
+          this.reconnectDelay = Math.min(
+            this.opts.maxReconnectDelayMs,
+            Math.floor(this.reconnectDelay * this.opts.reconnectBackoffFactor)
+          );
+        } catch (e) {
+          this.emit("reconnect_failed", e);
+        }
+      }, this.reconnectDelay);
+    }
+  };
 
   private handleOpen = () => {
     this.lastMessageAt = Date.now();
@@ -109,26 +141,6 @@ export class WebSocketTransport {
     this.emit("error", err);
   };
 
-  private handleClose = () => {
-    this.clearIdleCheck();
-    this.emit("close");
-    if (!this.closedByUser && this.opts.autoReconnect) {
-      this.emit("reconnect_attempt", this.reconnectDelay);
-      setTimeout(() => {
-        try {
-          this.open();
-          this.emit("reconnected");
-          this.reconnectDelay = Math.min(
-            this.opts.maxReconnectDelayMs,
-            Math.floor(this.reconnectDelay * this.opts.reconnectBackoffFactor)
-          );
-        } catch (e) {
-          this.emit("reconnect_failed", e);
-        }
-      }, this.reconnectDelay);
-    }
-  };
-
   private scheduleIdleCheck() {
     this.clearIdleCheck();
     this.idleTimer = setInterval(() => {
@@ -142,6 +154,7 @@ export class WebSocketTransport {
       }
     }, Math.min(5000, this.opts.idleTimeoutMs));
   }
+  
 
   private clearIdleCheck() {
     if (this.idleTimer) clearInterval(this.idleTimer);
@@ -164,4 +177,5 @@ export class WebSocketTransport {
       this.clearIdleCheck();
     }
   }
+  
 }

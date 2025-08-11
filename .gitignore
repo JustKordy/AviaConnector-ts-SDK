@@ -10,7 +10,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Lockfiles (volitelně – vyber si jeden správce balíčků)
+# Lockfiles (optional – pick one package manager)
 package-lock.json
 yarn.lock
 pnpm-lock.yaml

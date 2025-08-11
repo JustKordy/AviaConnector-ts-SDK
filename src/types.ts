@@ -99,4 +99,14 @@ export interface EventMap {
 }
 
 export type EventName = keyof EventMap;
-export type EventHandler<K extends EventName = EventName> = (payload: EventMap[K]) => void;
+export type EventHandler<K extends EventName = EventName> = (payload: EventMap[K], ctx: ClientContext) => void;
+
+export interface ClientContext {
+  id: number;
+  remoteAddress?: string | null;
+  subs: ReadonlySet<string>;
+  send: (payload: unknown) => void;
+  subscribe: (stream: string) => void;
+  unsubscribe: (stream: string) => void;
+  close: (code?: number, reason?: string) => void;
+}

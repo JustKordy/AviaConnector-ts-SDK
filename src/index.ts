@@ -1,3 +1,3 @@
 export * from "./types";
 export * from "./protocol";
-export * from "./AviaConnectorClient";
+export * from "./server/AviaConnectorServer";
