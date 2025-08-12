@@ -18,6 +18,7 @@ const server = new AviaConnectorServer({
 
 server.on("connection", (info: any) => {
   console.log("[server] connection:", info);
+  server.sendTo(info.id, {type: "request", data: { type: "AircraftData" }});
 });
 
 server.on("disconnect", (info: any) => {

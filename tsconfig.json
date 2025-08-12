@@ -7,6 +7,7 @@
     "strict": true,
     "sourceMap": true,
     "moduleResolution": "Bundler",
+    "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "verbatimModuleSyntax": true,
