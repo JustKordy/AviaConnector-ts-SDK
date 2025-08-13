@@ -8,7 +8,7 @@ export interface MessageEnvelope<T = unknown> {
 }
 
 export type AviaEventType =
-  | "flightData"
+  | "aircraftData"
   | "landing"
   | "airport"
   | "weather"
@@ -18,7 +18,7 @@ export type AviaEventType =
   | "heartbeat"
   | "raw";
 
-export interface FlightData {
+export interface AircraftData {
   simTime?: ISO8601;
   aircraft?: {
     name?: string;
@@ -87,7 +87,7 @@ export interface WeatherData {
 }
 
 export interface EventMap {
-  flightData: FlightData;
+  aircraftData: AircraftData;
   landing: LandingAnalytics;
   airport: AirportRunwayInfo;
   weather: WeatherData;

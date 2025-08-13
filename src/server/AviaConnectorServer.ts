@@ -131,7 +131,7 @@ export class AviaConnectorServer {
 
   // Public API
 
-  on<K extends EventName | ServerEvent>(event: K, handler: AnyHandler) {
+  on<K extends EventName | ServerEvent>(event: K, handler: AnyHandler): () => void {
     (this.listeners[event] ??= new Set()).add(handler);
     return () => this.off(event, handler);
   }

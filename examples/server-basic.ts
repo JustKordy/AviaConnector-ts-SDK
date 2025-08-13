@@ -34,13 +34,8 @@ server.on("status", (s: { message: string }) => {
   console.log("[status]", s.message);
 });
 
-
-server.on("flightData", (fd: any) => {
-  console.log(
-    "[flightData]",
-    "on ground:", fd?.on_ground ?? "-",
-    "ALT:", fd?.heading ?? "-"
-  );
+server.on("aircraftData", (m) => {
+  console.log("[message]", m.type, m.altitude);
 });
 
 server.on("landing", (l: any) => {
