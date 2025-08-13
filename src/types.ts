@@ -87,15 +87,16 @@ export interface WeatherData {
 }
 
 export interface EventMap {
-  aircraftData: AircraftData;
-  landing: LandingAnalytics;
-  airport: AirportRunwayInfo;
-  weather: WeatherData;
-  status: { message: string; code?: string | number };
-  error: { message: string; code?: string | number; details?: unknown };
-  pong: { ts?: number };
-  heartbeat: { ts: number };
-  raw: unknown;
+  listening: (info: { url: string }) => void;
+  connection: (ctx: ClientContext) => void;
+  disconnect: (ctx: { id: number; code?: number; reason?: string }) => void;
+  error: (err: any) => void;
+  aircraftData: (payload: AircraftData, ctx: ClientContext) => void;
+  landing: (payload: LandingAnalytics, ctx: ClientContext) => void;
+  airport: (payload: AirportRunwayInfo, ctx: ClientContext) => void;
+  weather: (payload: WeatherData, ctx: ClientContext) => void;
+  status: (payload: { message: string; code?: string | number }, ctx: ClientContext) => void;
+  // If there's both generic "error" and typed error contexts, disambiguate as needed
 }
 
 export type EventName = keyof EventMap;
