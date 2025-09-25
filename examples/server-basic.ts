@@ -16,34 +16,56 @@ const server = new AviaConnectorServer({
   // validateAuth: (token) => token === process.env.AVIA_TOKEN
 });
 
+let activeID = 0;
+
+
 server.on("connection", (info: any) => {
   console.log("[server] connection:", info);
-  server.sendTo(info.id, {type: "request", data: { type: "AircraftData" }});
+  activeID = info.id;
+  setInterval(() => {
+    server.sendTo(activeID, { type: "request", data: { type: "AircraftData" } });
+    console.log("ping");
+    if(activeID == 0)
+    {
+      clearInterval(this);
+    }
+  }, 1000);
+
+  
+});
+
+server.on("Status", (info) => {
+  console.log("[server] status:", info);
 });
 
 server.on("disconnect", (info: any) => {
   console.log("[server] disconnect:", info);
+  activeID = 0;
 });
 
 server.on("error", (e: any) => {
-  console.error("[server] error:", e);
+  console.error("[server] errord:", e);
 });
 
-// Handle incoming messages from AviaConnector (typed names)
-server.on("status", (s: { message: string }) => {
-  console.log("[status]", s.message);
-});
 
-server.on("aircraftData", (m) => {
-  console.log("[message]", m);
+server.on("AircraftData", (m) => {
+  console.log("[airdata]", m.Aircraft?.PLANE_LATITUDE);
+  console.log("[airdata]", m.Aircraft?.PLANE_LONGITUDE);
+  console.log("[airdata]", m.Aircraft?.PLANE_ALTITUDE);
+  console.log("[airdata]", m.Aircraft?.AIRSPEED_INDICATED);
+  console.log("----");
+  console.log("[airdata]", m.Aircraft?.AIRSPEED_TRUE);
+  console.log("[airdata]", m.Aircraft?.VERTICAL_SPEED);
+  console.log("[airdata]", m.Aircraft?.PLANE_HEADING_DEGREES_TRUE);
+  console.log("[airdata]", m.Aircraft?.PLANE_PITCH_DEGREES);
+  console.log("[airdata]", m.Aircraft?.PLANE_BANK_DEGREES);
+  console.log("[airdata]", m.Aircraft?.SIM_ON_GROUND);
 });
-
-server.on("landing", (l: any) => {
-  console.log("[landing]", "ROD:", l?.rateOfDescentFpm ?? "-", "G:", l?.gForce ?? "-");
-});
-
-server.on("weather", (w: any) => {
-  console.log("[weather]", "Wind:", w?.wind?.dirDeg, "/", w?.wind?.speedKts, "kts");
+server.on("NearestAirport", (a: any) => {
+  console.log("[airport]", a.icao, a.iata, a.name);
+  if (a.runway) {
+    console.log("[airport]", "Runway:", a.runway.id, a.runway.headingDeg, "deg", a.runway.lengthM, "m", a.runway.surface);
+  }
 });
 
 // If you want to push commands to the connected AviaConnector clients:

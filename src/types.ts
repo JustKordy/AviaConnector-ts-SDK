@@ -8,57 +8,31 @@ export interface MessageEnvelope<T = unknown> {
 }
 
 export type AviaEventType =
-  | "aircraftData"
-  | "landing"
-  | "airport"
-  | "weather"
-  | "status"
-  | "error"
-  | "pong"
-  | "heartbeat"
-  | "raw";
+  | "AircraftData"
+  | "Landing"
+  | "Airport"
+  | "Weather"
+  | "Status"
+  | "Error"
+  | "Pong"
+  | "Heartbeat"
+  | "Raw";
 
 export interface AircraftData {
-  simTime?: ISO8601;
-  aircraft?: {
-    name?: string;
-    type?: string;
-    icao?: string;
-  };
-  position?: {
-    lat: number;
-    lon: number;
-    altFt?: number;
-  };
-  attitude?: {
-    pitchDeg?: number;
-    rollDeg?: number;
-    headingDeg?: number;
-  };
-  speed?: {
-    iasKts?: number;
-    gsKts?: number;
-    tasKts?: number;
-    vsFpm?: number;
-  };
-  engine?: {
-    n1Pct?: number;
-    n2Pct?: number;
-    throttlePct?: number;
-    rpm?: number;
-  };
-}
+  Aircraft?: {
+    PLANE_ALTITUDE?: number; // feet
+    PLANE_LATITUDE?: number; // degrees
+    PLANE_LONGITUDE?: number; // degrees
+    PLANE_ALT_ABOVE_GROUND?: number; // feet
+    AIRSPEED_INDICATED?: number; // knots
+    AIRSPEED_TRUE?: number; // knots
+    VERTICAL_SPEED?: number; // feet per second
+    PLANE_HEADING_DEGREES_TRUE?: number; // degrees
+    PLANE_PITCH_DEGREES?: number; // degrees
+    PLANE_BANK_DEGREES?: number; // degrees
+    SIM_ON_GROUND?: boolean; // bool
+  }
 
-export interface LandingAnalytics {
-  rateOfDescentFpm?: number;
-  gForce?: number;
-  runwayId?: string;
-  touchdown?: {
-    lat: number;
-    lon: number;
-    distanceFromThresholdM?: number;
-    lateralOffsetM?: number;
-  };
 }
 
 export interface AirportRunwayInfo {
@@ -73,29 +47,15 @@ export interface AirportRunwayInfo {
   };
 }
 
-export interface WeatherData {
-  wind?: {
-    dirDeg?: number;
-    speedKts?: number;
-    gustKts?: number;
-  };
-  visibilityM?: number;
-  temperatureC?: number;
-  qnhHpa?: number;
-  clouds?: string;
-  metar?: string;
-}
 
 export interface EventMap {
   listening: (info: { url: string }) => void;
   connection: (ctx: ClientContext) => void;
   disconnect: (ctx: { id: number; code?: number; reason?: string }) => void;
   error: (err: any) => void;
-  aircraftData: (payload: AircraftData, ctx: ClientContext) => void;
-  landing: (payload: LandingAnalytics, ctx: ClientContext) => void;
-  airport: (payload: AirportRunwayInfo, ctx: ClientContext) => void;
-  weather: (payload: WeatherData, ctx: ClientContext) => void;
-  status: (payload: { message: string; code?: string | number }, ctx: ClientContext) => void;
+  AircraftData: (payload: AircraftData, ctx: ClientContext) => void;
+  NearestAirport: (payload: AirportRunwayInfo, ctx: ClientContext) => void;
+  Status: (payload: {code?: string, message?: string }, ctx: ClientContext) => void;
   // If there's both generic "error" and typed error contexts, disambiguate as needed
 }
 
