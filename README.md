@@ -6,7 +6,9 @@ Server-only TypeScript SDK that accepts WebSocket connections from AviaConnector
 - Optional auth handshake: `{ type: "auth", token }`
 - Built-in subscribe/unsubscribe commands
 - Auto `pong` on `{ type: "ping" }`
-- Strongly-typed event routing: `flightData`, `landing`, `airport`, `weather`, `status`, `error`
+- **Simulator connection tracking** - detects when a simulator connects/disconnects
+- **Automatic request blocking** when simulator is not connected
+- Strongly-typed event routing: `AircraftData`, `Landing`, `Airport`, `Weather`, `Status`, `Error`, `simulator`
 - Utilities: `push` (to subscribed clients), `broadcast` (to all), `sendTo` (specific client)
 
 Works great embedded in Electron main process or as a standalone Node.js service.
@@ -36,19 +38,35 @@ const server = new AviaConnectorServer({
   // validateAuth: (token) => token === process.env.AVIA_TOKEN
 });
 
-server.on("listening", (info: any) => console.log("[listening]", info.url));
-server.on("connection", (c: any) => console.log("[connection]", c));
-server.on("disconnect", (c: any) => console.log("[disconnect]", c));
-server.on("error", (e: any) => console.error("[server error]", e));
+server.on("listening", (info) => console.log("[listening]", info.url));
+server.on("connection", (c) => console.log("[connection]", c));
+server.on("disconnect", (c) => console.log("[disconnect]", c));
+server.on("error", (e) => console.error("[server error]", e));
 
-// Typed inbound messages from the client:
-server.on("flightData", (fd: any, ctx: any) => {
-  console.log("[flightData]", "from", ctx.id, "IAS:", fd?.speed?.iasKts ?? "-", "ALT:", fd?.position?.altFt ?? "-");
+// Simulator connection and disconnection status
+server.on("Status", (status, ctx) => {
+  if (status.code === "600") {
+    console.log(`[simulator connected] ${status.message}`);
+  } else if (status.code === "601") {
+    console.log(`[simulator disconnected] ${status.message}`);
+  }
 });
 
-// Push typed data back to clients that subscribed to that stream:
+// Typed inbound messages from the client:
+server.on("AircraftData", (data, ctx) => {
+  console.log("[AircraftData]", "from", ctx.id, 
+    "IAS:", data?.Aircraft?.AIRSPEED_INDICATED ?? "-", 
+    "ALT:", data?.Aircraft?.PLANE_ALTITUDE ?? "-");
+});
+
+// Check if simulator is connected before requesting data
 setInterval(() => {
-  server.push("weather", { wind: { dirDeg: 240, speedKts: 12, gustKts: 18 }, qnhHpa: 1015, temperatureC: 18 });
+  if (server.isSimulatorConnected()) {
+    server.broadcast({ type: "request", data: { type: "AircraftData" } });
+    console.log(`[request] Requesting data from ${server.getSimulatorType()} simulator`);
+  } else {
+    console.log("[request] Simulator not connected, skipping data request");
+  }
 }, 5000);
 ```
 
@@ -70,7 +88,16 @@ app.on("ready", () => {
 
   server = new AviaConnectorServer({ host: "127.0.0.1", port: 8765 });
   server.on("listening", (i) => win.webContents.send("sdk:listening", i));
-  server.on("flightData", (fd, ctx) => win.webContents.send("sdk:flightData", { fd, clientId: ctx.id }));
+  server.on("AircraftData", (data, ctx) => win.webContents.send("sdk:AircraftData", { data, clientId: ctx.id }));
+  
+  // Track simulator connection status
+  server.on("Status", (status) => {
+    if (status.code === "600") {
+      win.webContents.send("sdk:simulatorConnected", { type: status.message });
+    } else if (status.code === "601") {
+      win.webContents.send("sdk:simulatorDisconnected", { type: status.message });
+    }
+  });
 
   // your window load...
 });
@@ -90,23 +117,35 @@ The server expects JSON text frames. Built-in commands:
   ```
 - Subscribe / Unsubscribe (controls which clients receive `server.push()`):
   ```json
-  { "type": "subscribe", "data": { "stream": "flightData" } }
-  { "type": "unsubscribe", "data": { "stream": "flightData" } }
+  { "type": "subscribe", "data": { "stream": "AircraftData" } }
+  { "type": "unsubscribe", "data": { "stream": "AircraftData" } }
+  ```
+- Request data from the simulator:
+  ```json
+  { "type": "request", "data": { "type": "AircraftData" } }
   ```
 - Ping (server auto-responds with `pong` if `autoPong` is true):
   ```json
   { "type": "ping", "ts": 1712345678 }
   ```
 
-Typed event example (triggers `server.on("flightData", ...)`):
+Aircraft data example (triggers `server.on("AircraftData", ...)`):
 ```json
 {
-  "type": "flightData",
+  "type": "AircraftData",
   "data": {
-    "position": { "lat": 50.1, "lon": 14.4, "altFt": 2200 },
-    "speed": { "iasKts": 145, "gsKts": 150, "vsFpm": -300 },
-    "attitude": { "pitchDeg": 1.2, "rollDeg": -3.5, "headingDeg": 92 },
-    "aircraft": { "name": "A320neo", "type": "A20N", "icao": "A20N" }
+    "Aircraft": {
+      "PLANE_ALTITUDE": 2200,
+      "PLANE_LATITUDE": 50.1, 
+      "PLANE_LONGITUDE": 14.4,
+      "AIRSPEED_INDICATED": 145,
+      "AIRSPEED_TRUE": 150,
+      "VERTICAL_SPEED": -300,
+      "PLANE_HEADING_DEGREES_TRUE": 92,
+      "PLANE_PITCH_DEGREES": 1.2,
+      "PLANE_BANK_DEGREES": -3.5,
+      "SIM_ON_GROUND": false
+    }
   }
 }
 ```
@@ -118,7 +157,7 @@ Typed event example (triggers `server.on("flightData", ...)`):
 ```bash
 npx wscat -c ws://127.0.0.1:8765
 # Paste:
-{"type":"flightData","data":{"position":{"lat":50.1,"lon":14.4,"altFt":2200},"speed":{"iasKts":145}}}
+{"type":"AircraftData","data":{"Aircraft":{"PLANE_LATITUDE":50.1,"PLANE_LONGITUDE":14.4,"PLANE_ALTITUDE":2200,"AIRSPEED_INDICATED":145}}}
 ```
 
 If you enabled auth:
@@ -127,6 +166,35 @@ If you enabled auth:
 ```
 
 ---
+
+## Simulator Connection Status
+
+The SDK now automatically tracks simulator connection status:
+
+```ts
+// Check if a simulator is connected
+if (server.isSimulatorConnected()) {
+  console.log(`Connected to: ${server.getSimulatorType()}`); // "MSFS", etc.
+} else {
+  console.log("No simulator connected");
+}
+```
+
+When the simulator connects, it sends a Status message:
+```json
+{ "type": "Status", "data": { "code": "600", "message": "MSFS" } }
+```
+
+When the simulator disconnects, it sends:
+```json
+{ "type": "Status", "data": { "code": "601", "message": "MSFS" } }
+```
+
+The SDK will automatically block requests to the simulator when it's not connected.
+If you try to request data when no simulator is connected, you'll receive:
+```json
+{ "type": "error", "data": { "message": "Simulator is not connected" } }
+```
 
 ## API
 
@@ -151,13 +219,15 @@ Methods:
 - push<K extends EventName>(event: K, data: EventMap[K]): void – send to clients subscribed to `event`
 - sendTo(clientId: number, payload: unknown): void – send to a specific client
 - close(): void – stop server
+- isSimulatorConnected(): boolean – check if a simulator is connected
+- getSimulatorType(): string | null – get the type of connected simulator (e.g., "MSFS")
 
 Events:
 - "listening": `{ url: string }`
 - "connection": `{ id: number, remote?: string | null }`
 - "disconnect": `{ id: number, code?: number, reason?: string }`
 - "error": any
-- Typed events: "flightData" | "landing" | "airport" | "weather" | "status" | "error"
+- Typed events: "AircraftData" | "Landing" | "Airport" | "Weather" | "Status" | "simulator" | "Error"
   - Handler signature: `(payload, ctx)`
   - `ctx` is `ClientContext`:
     - `id: number`
@@ -183,6 +253,7 @@ Types are included with the package.
 - Nothing triggers handlers: verify the client sends `{"type":"<event>","data":{...}}` as JSON text.
 - `push()` not reaching clients: clients must first `subscribe` to that stream.
 - Auth close code 1008: your `validateAuth` returned false; send a proper `{"type":"auth","token":"..."}` first.
+- Not receiving data: check if the simulator is connected using `server.isSimulatorConnected()`
 
 ---
 
