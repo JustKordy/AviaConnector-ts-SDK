@@ -1,6 +1,6 @@
 {
   "name": "avia-connector-sdk",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Server-only TypeScript SDK that accepts WebSocket connections from AviaConnector clients.",
   "license": "MIT",
   "author": "JustKordy",
