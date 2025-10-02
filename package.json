@@ -27,6 +27,9 @@
     "build": "tsup src/index.ts --dts --format esm,cjs --sourcemap --clean",
     "clean": "rimraf dist",
     "dev": "npm run build && npx tsx watch examples/server-basic.ts watch src",
+    "dev:basic": "npx tsx examples/server-basic.ts",
+    "dev:airport": "npx tsx examples/server-nearest-airport.ts",
+    "dev:client": "npx tsx examples/client-nearest-airport.ts",
     "test": "echo \"Error: no test specified\""
 
   },

@@ -8,10 +8,13 @@ Server-only TypeScript SDK that accepts WebSocket connections from AviaConnector
 - Auto `pong` on `{ type: "ping" }`
 - **Simulator connection tracking** - detects when a simulator connects/disconnects
 - **Automatic request blocking** when simulator is not connected
-- Strongly-typed event routing: `AircraftData`, `Landing`, `Airport`, `Weather`, `Status`, `Error`, `simulator`
+- Strongly-typed event routing: `AircraftData`, `Landing`, `Airport`, `Weather`, `Status`, `Error`, `simulator`, `NearestAirportData`
+- **Nearest Airport Feature**: Get detailed airport and runway information for the nearest airport to your aircraft
 - Utilities: `push` (to subscribed clients), `broadcast` (to all), `sendTo` (specific client)
 
 Works great embedded in Electron main process or as a standalone Node.js service.
+
+> 📍 **New Feature**: Check out [`NEAREST_AIRPORT.md`](./NEAREST_AIRPORT.md) for complete documentation on requesting nearest airport data with detailed runway information!
 
 ---
 
@@ -57,6 +60,12 @@ server.on("AircraftData", (data, ctx) => {
   console.log("[AircraftData]", "from", ctx.id, 
     "IAS:", data?.Aircraft?.AIRSPEED_INDICATED ?? "-", 
     "ALT:", data?.Aircraft?.PLANE_ALTITUDE ?? "-");
+});
+
+server.on("NearestAirportData", (data, ctx) => {
+  console.log("[NearestAirport]", data.airport.icao, 
+    `${data.distanceNM.toFixed(2)} NM`, 
+    `${data.airport.runways.length} runways`);
 });
 
 // Check if simulator is connected before requesting data
@@ -123,6 +132,7 @@ The server expects JSON text frames. Built-in commands:
 - Request data from the simulator:
   ```json
   { "type": "request", "data": { "type": "AircraftData" } }
+  { "type": "request", "data": { "type": "NearestAirportData" } }
   ```
 - Ping (server auto-responds with `pong` if `autoPong` is true):
   ```json
@@ -145,6 +155,44 @@ Aircraft data example (triggers `server.on("AircraftData", ...)`):
       "PLANE_PITCH_DEGREES": 1.2,
       "PLANE_BANK_DEGREES": -3.5,
       "SIM_ON_GROUND": false
+    }
+  }
+}
+```
+
+Nearest airport data example (triggers `server.on("NearestAirportData", ...)`):
+```json
+{
+  "type": "NearestAirportData",
+  "data": {
+    "airport": {
+      "icao": "KJFK",
+      "name": "John F Kennedy International Airport",
+      "lat": 40.6398,
+      "lon": -73.7789,
+      "alt": 4.0,
+      "runways": [
+        {
+          "number": "04L/22R",
+          "lat": 40.6431,
+          "lon": -73.7745,
+          "heading": 40.0,
+          "length": 3460.0,
+          "width": 60.0,
+          "surface": 0,
+          "lighting": 31,
+          "end1": { "number": "04L", "lat": 40.6398, "lon": -73.7823, "heading": 40.0 },
+          "end2": { "number": "22R", "lat": 40.6464, "lon": -73.7667, "heading": 220.0 }
+        }
+      ]
+    },
+    "distanceNM": 5.2,
+    "bearing": 287.5,
+    "aircraftPosition": {
+      "lat": 40.6500,
+      "lon": -73.8000,
+      "alt": 1500.0,
+      "heading": 180.0
     }
   }
 }
@@ -227,7 +275,7 @@ Events:
 - "connection": `{ id: number, remote?: string | null }`
 - "disconnect": `{ id: number, code?: number, reason?: string }`
 - "error": any
-- Typed events: "AircraftData" | "Landing" | "Airport" | "Weather" | "Status" | "simulator" | "Error"
+- Typed events: "AircraftData" | "Landing" | "Airport" | "Weather" | "Status" | "simulator" | "Error" | "NearestAirportData"
   - Handler signature: `(payload, ctx)`
   - `ctx` is `ClientContext`:
     - `id: number`

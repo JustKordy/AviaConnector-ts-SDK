@@ -124,6 +124,7 @@ export class AviaConnectorServer {
               (requestData.type === "AircraftData" || 
                requestData.type === "Weather" || 
                requestData.type === "Landing" || 
+               requestData.type === "NearestAirportData" ||
                requestData.type === "Airport")) {
             
             if (!this.simulatorConnected) {
@@ -238,26 +239,25 @@ export class AviaConnectorServer {
 
   private route(env: MessageEnvelope, ctx: ClientContext) {
     const data = env.data;
-    const t = env.type as EventName;
+    let t = env.type as EventName;
+
+    // Normalize AviaConnector's lowercase "error" to typed "Error" event
+    if (t === "error") {
+      t = "Error" as EventName;
+    }
     
-    // Track simulator connection status - handle special Status messages
+    // Track simulator connection status - strictly follow nested StatusData shape
     if (t === "Status") {
-      // Handle both formats that AviaConnector might send:
-      // Format 1: { "type": "Status", "data": { "code": "600", "message": "MSFS" } }
-      // Format 2: { "type": "Status", "data": { "code": "600" }, "message": "MSFS Connected" }
-      
-      // Extract status code and message from wherever they might be
+      // Expecting env.data to conform to StatusData: { data: { code, message } }
       let statusCode: string | undefined;
       let statusMessage: string | undefined;
-      
+
       if (data && typeof data === "object") {
         const statusData = data as any;
-        statusCode = statusData.data.code;
-        statusMessage = statusData.data.message;
-        
-        // If the message is not in the expected location, check if it's directly in the envelope
-        if (!statusMessage && typeof (env as any).message === "string") {
-          statusMessage = (env as any).message;
+        const inner = statusData?.data;
+        if (inner && typeof inner === "object") {
+          statusCode = inner.code;
+          statusMessage = inner.message;
         }
       }
       
@@ -276,14 +276,15 @@ export class AviaConnectorServer {
     }
     
     
-    if (this.listeners[t]?.size) {
-      // Pass only the payload data to handlers
-      this.emit(t, data as any);
+  if (this.listeners[t]?.size) {
+      // Pass consistent payloads to handlers; for Status, pass inner data
+      const emitted = t === "Status" && data && (data as any).data ? (data as any).data : data;
+      this.emit(t, emitted as any);
       
       // To support (payload, ctx) signature, call handlers manually:
       this.listeners[t]?.forEach((h) => {
         try {
-          (h as EventHandler as any)(data, ctx);
+          (h as EventHandler as any)(emitted, ctx);
         } catch (e) {
           // eslint-disable-next-line no-console
           console.error("[AviaConnectorServer] handler error", e);
