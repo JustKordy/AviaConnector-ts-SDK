@@ -178,19 +178,22 @@ export interface NearestAirportData {
 
 
 
+/**
+ * Status data received from AviaConnector.
+ * Note: The server's route method extracts the inner data.data object before emitting,
+ * so handlers receive the flattened structure.
+ */
 export interface StatusData {
-  data?: {
-    /**
-     * Status codes for simulator connection states:
-     * - "600" - simulator connected
-     * - "601" - simulator disconnected
-     */
-    code?: string;
-    /**
-     * Message describing the simulator (e.g. "MSFS Connected", "MSFS Disconnected")
-     */
-    message?: string;
-  };
+  /**
+   * Status codes for simulator connection states:
+   * - "600" - simulator connected
+   * - "601" - simulator disconnected
+   */
+  code?: string;
+  /**
+   * Message describing the simulator (e.g. "MSFS Connected", "MSFS Disconnected")
+   */
+  message?: string;
 }
 
 export interface ErrorData {
