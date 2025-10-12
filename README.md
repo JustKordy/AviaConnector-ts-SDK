@@ -1,31 +1,26 @@
 # @justkordy/avia-connector-sdk
 
-Server-only TypeScript SDK that accepts WebSocket connections from AviaConnector clients (your app is the server, AviaConnector connects as a client).
+A lightweight, straightforward TypeScript SDK for receiving real-time aircraft data from flight simulators via AviaConnector.
 
-- Accepts incoming WebSocket connections
-- Optional auth handshake: `{ type: "auth", token }`
-- Built-in subscribe/unsubscribe commands
-- Auto `pong` on `{ type: "ping" }`
-- **Simulator connection tracking** - detects when a simulator connects/disconnects
-- **Automatic request blocking** when simulator is not connected
-- Strongly-typed event routing: `AircraftData`, `Landing`, `Airport`, `Weather`, `Status`, `Error`, `simulator`, `NearestAirportData`
-- **Nearest Airport Feature**: Get detailed airport and runway information for the nearest airport to your aircraft
-- Utilities: `push` (to subscribed clients), `broadcast` (to all), `sendTo` (specific client)
+## Features
 
-Works great embedded in Electron main process or as a standalone Node.js service.
-
-> 📍 **New Feature**: Check out [`NEAREST_AIRPORT.md`](./NEAREST_AIRPORT.md) for complete documentation on requesting nearest airport data with detailed runway information!
+- ✈️ **Simple API** - Single callback-based interface
+- 🚀 **Lightweight** - No complex event system or multi-client support
+- 📊 **Extensible** - Easy to add new aircraft data properties
+- 🎯 **Type-safe** - Full TypeScript support
+- 🔌 **WebSocket-based** - Real-time data streaming
+- 🎮 **Simulator tracking** - Automatic MSFS/P3D/X-Plane detection
 
 ---
 
 ## Install
 
 ```bash
-npm i @justkordy/avia-connector-sdk ws
+npm install @justkordy/avia-connector-sdk ws
 ```
 
 - ws is required at runtime (peer dependency)
-- Node.js 18+ recommended
+- Node.js 16+ recommended
 
 ---
 

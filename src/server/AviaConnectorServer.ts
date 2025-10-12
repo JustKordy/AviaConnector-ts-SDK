@@ -1,324 +1,270 @@
 import { WebSocketServer, WebSocket } from "ws";
-import { defaultParseMessage } from "../protocol";
-import {
-  SimulatorStatusCodes,
-  type ClientContext,
-  type EventHandler,
-  type EventMap,
-  type EventName,
-  type MessageEnvelope,
-  type StatusData
-} from "../types";
+import type { AircraftData, MessageEnvelope, SimulatorStatus } from "../types";
 
 export interface AviaConnectorServerOptions {
   port: number;
-  host?: string; // default 0.0.0.0
-  path?: string; // optional ws path
+  host?: string;
+  path?: string;
   
-  // If provided, require an auth message: { type: "auth", token }
-  validateAuth?: (token: string | undefined, ctx: Omit<ClientContext, "send" | "subscribe" | "unsubscribe" | "close">) => boolean;
+  /**
+   * Callback when server starts listening
+   */
+  onListening?: (url: string) => void;
   
-  parseMessage?: (raw: any) => MessageEnvelope;
-  // When true, server responds to {type:"ping"} with {type:"pong"}
-  autoPong?: boolean;
+  /**
+   * Callback when client connects
+   */
+  onConnection?: () => void;
+  
+  /**
+   * Callback when client disconnects
+   */
+  onDisconnect?: () => void;
+  
+  /**
+   * Callback when aircraft data is received
+   */
+  onAircraftData?: (data: AircraftData) => void;
+  
+  /**
+   * Callback when simulator connection status changes
+   */
+  onSimulatorStatus?: (status: SimulatorStatus) => void;
+  
+  /**
+   * Callback for errors
+   */
+  onError?: (error: Error) => void;
 }
 
-type ServerEvent = "connection" | "disconnect" | "error" | "listening";
-
-type AnyHandler = (...args: any[]) => void;
-
-interface ClientRec {
-  ws: WebSocket;
-  authed: boolean;
-  subs: Set<string>;
-  remote?: string | null;
-  lastActivityTime?: number;
-}
-
+/**
+ * Simplified AviaConnector WebSocket Server
+ * - Single client only
+ * - Only handles aircraft data
+ * - Simple callback-based API
+ */
 export class AviaConnectorServer {
   private wss: WebSocketServer;
-  private parseMessage: Required<AviaConnectorServerOptions>["parseMessage"];
-  private validateAuth?: AviaConnectorServerOptions["validateAuth"];
-  private autoPong: boolean;
-  private nextId = 1;
-  private simulatorConnected: boolean = false;
-  private simulatorType: string | null = null;
-
-  private clients = new Map<number, ClientRec>();
-
-  private listeners: {
-    [K in EventName | ServerEvent]?: Set<AnyHandler>;
-  } = {};
+  private client?: WebSocket;
+  private simulatorStatus: SimulatorStatus = { connected: false };
+  
+  // Callbacks
+  private readonly onListening?: (url: string) => void;
+  private readonly onConnection?: () => void;
+  private readonly onDisconnect?: () => void;
+  private readonly onAircraftData?: (data: AircraftData) => void;
+  private readonly onSimulatorStatus?: (status: SimulatorStatus) => void;
+  private readonly onError?: (error: Error) => void;
 
   constructor(opts: AviaConnectorServerOptions) {
-    this.parseMessage = opts.parseMessage ?? defaultParseMessage;
-    this.validateAuth = opts.validateAuth;
-    this.autoPong = opts.autoPong ?? true;
+    this.onListening = opts.onListening;
+    this.onConnection = opts.onConnection;
+    this.onDisconnect = opts.onDisconnect;
+    this.onAircraftData = opts.onAircraftData;
+    this.onSimulatorStatus = opts.onSimulatorStatus;
+    this.onError = opts.onError;
 
-    this.wss = new WebSocketServer({
-      host: opts.host ?? "0.0.0.0",
-      port: opts.port,
-      path: opts.path
-    });
+    const host = opts.host ?? "0.0.0.0";
+    const port = opts.port;
+    const path = opts.path;
+
+    this.wss = new WebSocketServer({ host, port, path });
 
     this.wss.on("listening", () => {
-      this.emit("listening", { url: `ws://${opts.host ?? "0.0.0.0"}:${opts.port}${opts.path ?? ""}` });
+      const url = `ws://${host}:${port}${path ?? ""}`;
+      this.onListening?.(url);
     });
 
-    this.wss.on("connection", (ws, req) => {
-      const id = this.nextId++;
-      const remote = req.socket.remoteAddress;
-      const rec: ClientRec = {
-        ws,
-        authed: this.validateAuth ? false : true,
-        subs: new Set(),
-        remote
-      };
-      this.clients.set(id, rec);
-
-      this.emit("connection", { id, remote });
-
-      const ctx = this.makeCtx(id, rec);
+    this.wss.on("connection", (ws) => {
+      // Only support single client - close existing if new one connects
+      if (this.client) {
+        this.client.close(1000, "New client connected");
+      }
+      
+      this.client = ws;
+      this.onConnection?.();
 
       ws.on("message", (raw) => {
-        const env = this.parseMessage(raw);
-        if (!rec.authed) {
-          if (env.type === "auth") {
-            const token = (typeof env.data === "object" && env.data) ? (env as any).data?.token ?? (env as any).token : undefined;
-            const ok = this.validateAuth?.(token, { id, remoteAddress: rec.remote ?? null, subs: rec.subs }) ?? false;
-            if (ok) {
-              rec.authed = true;
-              ctx.send({ type: "status", data: { message: "auth ok" }, ts: Date.now() });
-            } else {
-              ctx.send({ type: "error", data: { message: "auth failed" }, ts: Date.now() });
-              ws.close(1008, "auth failed");
-            }
-            return;
-          }
-          ctx.send({ type: "error", data: { message: "unauthenticated" }, ts: Date.now() });
-          return;
+        try {
+          const message = this.parseMessage(raw);
+          this.handleMessage(message);
+        } catch (err) {
+          this.onError?.(err instanceof Error ? err : new Error(String(err)));
         }
-
-        // Built-ins
-        if (env.type === "subscribe") {
-          const stream = (env as any)?.data?.stream;
-          if (typeof stream === "string") rec.subs.add(stream);
-          ctx.send({ type: "status", data: { message: `subscribed ${stream}` }, ts: Date.now() });
-          return;
-        }
-        if (env.type === "unsubscribe") {
-          const stream = (env as any)?.data?.stream;
-          if (typeof stream === "string") rec.subs.delete(stream);
-          ctx.send({ type: "status", data: { message: `unsubscribed ${stream}` }, ts: Date.now() });
-          return;
-        }
-        if (env.type === "ping" && this.autoPong) {
-          ctx.send({ type: "pong", ts: (env as any).ts ?? Date.now() });
-          return;
-        }
-        
-        // Block requests for simulator data when simulator is not connected
-        if (env.type === "request" && env.data && typeof env.data === "object") {
-          const requestData = env.data as any;
-          if (requestData.type && 
-              (requestData.type === "AircraftData" || 
-               requestData.type === "Weather" || 
-               requestData.type === "Landing" || 
-               requestData.type === "NearestAirportData" ||
-               requestData.type === "Airport")) {
-            
-            if (!this.simulatorConnected) {
-              ctx.send({ 
-                type: "error", 
-                data: { message: "Simulator isnt connected" }, 
-                ts: Date.now() 
-              });
-              return;
-            }
-          }
-        }
-
-        // Route typed events to user handlers
-        this.route(env, ctx);
       });
 
-      ws.on("close", (code, reason) => {
-        this.clients.delete(id);
-        this.emit("disconnect", { id, code, reason: reason?.toString() });
+      ws.on("close", () => {
+        if (this.client === ws) {
+          this.client = undefined;
+          this.onDisconnect?.();
+        }
       });
 
       ws.on("error", (err) => {
-        this.emit("error", { id, error: err });
+        this.onError?.(err);
       });
     });
 
     this.wss.on("error", (err) => {
-      this.emit("error", { error: err });
+      this.onError?.(err);
     });
   }
 
-  // Public API
-
-  on<K extends keyof EventMap>(
-  event: K,
-  handler: EventMap[K]
-): () => void {
-  (this.listeners[event] ??= new Set()).add(handler as any);
-  return () => this.off(event, handler as any);
-}
-
-  off<K extends EventName | ServerEvent>(event: K, handler: AnyHandler) {
-    this.listeners[event]?.delete(handler);
-  }
-
   /**
-   * Broadcast any payload to all connected clients (no subscription check).
+   * Parse raw WebSocket message to JSON
    */
-  broadcast(payload: unknown) {
-    const text = typeof payload === "string" ? payload : JSON.stringify(payload);
-    for (const { ws } of this.clients.values()) {
-      this.safeSend(ws, text, true);
-    }
-  }
-
-  /**
-   * Emit a typed event to subscribed clients.
-   * Example: server.push("weather", { wind: { dirDeg: 180, speedKts: 12 } })
-   */
-  push<K extends EventName>(event: K, data: EventMap[K]) {
-    const payload = JSON.stringify({ type: event, ts: Date.now(), data });
-    for (const { ws, subs } of this.clients.values()) {
-      if (subs.has(event)) this.safeSend(ws, payload, true);
-    }
-  }
-
-  /**
-   * Send a payload to a specific client id (ignores subscriptions).
-   */
-  sendTo(clientId: number, payload: unknown) {
-    const client = this.clients.get(clientId);
-    if (!client) return;
-    const text = typeof payload === "string" ? payload : JSON.stringify(payload);
-    this.safeSend(client.ws, text, true);
-  }
-
-  /**
-   * Close the server.
-   */
-  close() {
-    this.wss.close();
-  }
-
-  // Internals
-
-  private emit(event: EventName | ServerEvent, payload: any) {
-    this.listeners[event]?.forEach((h) => {
-      try {
-        (h as any)(payload);
-      } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error("[AviaConnectorServer] listener error", e);
-      }
-    });
-  }
-
-  private makeCtx(id: number, rec: ClientRec): ClientContext {
-    return {
-      id,
-      remoteAddress: rec.remote ?? null,
-      subs: rec.subs,
-      send: (payload: unknown) => {
-        const text = typeof payload === "string" ? payload : JSON.stringify(payload);
-        this.safeSend(rec.ws, text, true);
-      },
-      subscribe: (stream: string) => rec.subs.add(stream),
-      unsubscribe: (stream: string) => rec.subs.delete(stream),
-      close: (code?: number, reason?: string) => rec.ws.close(code, reason)
-    };
-  }
-
-  private route(env: MessageEnvelope, ctx: ClientContext) {
-    const data = env.data;
-    let t = env.type as EventName;
-
-    // Normalize AviaConnector's lowercase "error" to typed "Error" event
-    if (t === "error") {
-      t = "Error" as EventName;
-    }
+  private parseMessage(raw: any): MessageEnvelope {
+    // Convert Buffer/ArrayBuffer to string
+    let text: string;
     
-    // Track simulator connection status - strictly follow nested StatusData shape
-    if (t === "Status") {
-      // Expecting env.data to conform to StatusData: { data: { code, message } }
-      let statusCode: string | undefined;
-      let statusMessage: string | undefined;
-
-      if (data && typeof data === "object") {
-        const statusData = data as any;
-        const inner = statusData?.data;
-        if (inner && typeof inner === "object") {
-          statusCode = inner.code;
-          statusMessage = inner.message;
-        }
-      }
-      
-      // Process based on status code
-      if (statusCode === SimulatorStatusCodes.MSFS_CONNECTED) {
-        // Simulator connected
-        this.simulatorConnected = true;
-        this.simulatorType = statusMessage?.includes("MSFS") ? "MSFS" : statusMessage || "unknown";
-        console.log(`[AviaConnectorServer] Simulator connected: ${this.simulatorType}`);
-      } else if (statusCode === SimulatorStatusCodes.MSFS_DISCONNECTED) {
-        // Simulator disconnected - code 601 indicates simulator exit
-        this.simulatorConnected = false;
-        console.log(`[AviaConnectorServer] Simulator disconnected: ${this.simulatorType || statusMessage || "unknown"}`);
-        this.simulatorType = null;
-      }
-    }
-    
-    
-  if (this.listeners[t]?.size) {
-      // Pass consistent payloads to handlers; for Status, pass inner data
-      const emitted = t === "Status" && data && (data as any).data ? (data as any).data : data;
-      this.emit(t, emitted as any);
-      
-      // To support (payload, ctx) signature, call handlers manually:
-      this.listeners[t]?.forEach((h) => {
-        try {
-          (h as EventHandler as any)(emitted, ctx);
-        } catch (e) {
-          // eslint-disable-next-line no-console
-          console.error("[AviaConnectorServer] handler error", e);
-        }
-      });
+    if (typeof raw === "string") {
+      text = raw;
+    } else if (Buffer.isBuffer(raw)) {
+      text = raw.toString("utf8");
+    } else if (raw instanceof ArrayBuffer) {
+      text = Buffer.from(raw).toString("utf8");
+    } else if (Array.isArray(raw)) {
+      const buffers = raw.map(item => Buffer.isBuffer(item) ? item : Buffer.from(item));
+      text = Buffer.concat(buffers).toString("utf8");
     } else {
-      this.emit("error", { message: "unhandled message", type: env.type, data: data, clientId: ctx.id });
+      text = String(raw);
     }
-  }
-  
-  /**
-   * Returns whether a simulator is currently connected
-   */
-  public isSimulatorConnected(): boolean {
-    return this.simulatorConnected;
-  }
-  
-  /**
-   * Returns the type of simulator connected (e.g., "MSFS")
-   */
-  public getSimulatorType(): string | null {
-    return this.simulatorType;
+    
+    // Parse JSON
+    try {
+      const obj = JSON.parse(text);
+      if (obj && typeof obj.type === "string") {
+        return obj as MessageEnvelope;
+      }
+      return { type: "unknown", data: obj };
+    } catch {
+      return { type: "unknown", data: text };
+    }
   }
 
-  private safeSend(ws: WebSocket, payload: unknown, assumeString = false) {
-    try {
-      // Convert payload to string if it's not already
-      const text = assumeString && typeof payload === "string" ? payload : JSON.stringify(payload);
+  /**
+   * Handle incoming messages from AviaConnector
+   */
+  private handleMessage(message: MessageEnvelope) {
+    const { type, data } = message;
+    
+    // Handle aircraft data
+    if (type === "AircraftData") {
+      if (!data) return;
       
-      // Send the message
-      ws.send(text);
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error("[AviaConnectorServer] send error", e);
+      // Extract aircraft data (handle both nested and flat formats)
+      const aircraftData: AircraftData = (data as any).Aircraft ?? data;
+      this.onAircraftData?.(aircraftData);
     }
+    
+    // Handle simulator status
+    else if (type === "Status") {
+      if (!data) return;
+      
+      // Extract status code and message (handle nested format)
+      const statusData = (data as any).data ?? data;
+      const code = statusData.code;
+      const message = statusData.message;
+      
+      // Update simulator status
+      if (code === "600") {
+        // Simulator connected
+        this.simulatorStatus = {
+          connected: true,
+          simulator: this.detectSimulator(message)
+        };
+        this.onSimulatorStatus?.(this.simulatorStatus);
+      } else if (code === "601") {
+        // Simulator disconnected
+        this.simulatorStatus = { connected: false };
+        this.onSimulatorStatus?.(this.simulatorStatus);
+      }
+    }
+    
+    // Handle errors
+    else if (type === "Error" || type === "error") {
+      const errorMsg = typeof data === "string" ? data : (data as any)?.message ?? "Unknown error";
+      this.onError?.(new Error(errorMsg));
+    }
+  }
+
+  /**
+   * Detect simulator type from status message
+   */
+  private detectSimulator(message?: string): "MSFS" | "P3D" | "X-Plane" | "Unknown" {
+    if (!message) return "Unknown";
+    
+    const msg = message.toLowerCase();
+    if (msg.includes("msfs")) return "MSFS";
+    if (msg.includes("p3d") || msg.includes("prepar3d")) return "P3D";
+    if (msg.includes("x-plane") || msg.includes("xplane")) return "X-Plane";
+    
+    return "Unknown";
+  }
+
+  /**
+   * Send data to the connected client
+   */
+  send(data: any): boolean {
+    if (!this.client || this.client.readyState !== WebSocket.OPEN) {
+      return false;
+    }
+    
+    try {
+      const message = typeof data === "string" ? data : JSON.stringify(data);
+      this.client.send(message);
+      return true;
+    } catch (err) {
+      this.onError?.(err instanceof Error ? err : new Error(String(err)));
+      return false;
+    }
+  }
+
+  /**
+   * Request aircraft data from AviaConnector
+   */
+  requestAircraftData(): boolean {
+    return this.send({
+      type: "request",
+      data: { type: "AircraftData" },
+      ts: Date.now()
+    });
+  }
+
+  /**
+   * Get current simulator connection status
+   */
+  getSimulatorStatus(): SimulatorStatus {
+    return { ...this.simulatorStatus };
+  }
+
+  /**
+   * Check if simulator is connected
+   */
+  isSimulatorConnected(): boolean {
+    return this.simulatorStatus.connected;
+  }
+
+  /**
+   * Check if client is connected
+   */
+  isClientConnected(): boolean {
+    return this.client !== undefined && this.client.readyState === WebSocket.OPEN;
+  }
+
+  /**
+   * Close the server and disconnect all clients
+   */
+  close(): Promise<void> {
+    return new Promise((resolve) => {
+      if (this.client) {
+        this.client.close(1000, "Server closing");
+        this.client = undefined;
+      }
+      
+      this.wss.close(() => {
+        resolve();
+      });
+    });
   }
 }
