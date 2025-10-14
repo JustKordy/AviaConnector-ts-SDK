@@ -26,14 +26,27 @@ export interface AircraftData {
   PLANE_PITCH_DEGREES?: number; // degrees (-90 to +90)
   PLANE_BANK_DEGREES?: number; // degrees (-180 to +180)
   SIM_ON_GROUND?: boolean;
-
-  AIRCRAFT_MODEL?: string; // ICAO code of the aircraft
-  AIRCRAFT_TYPE?: string; // Full name of the aircraft
-
+  
   G_FORCE?: number; // G force
+
+  TITLE?: string; // Aircraft title/name
+  ATC_MODEL?: string; // ATC model
+  LIGHT_NAV_ON?: boolean; // Navigation lights
+  LIGHT_BEACON_ON?: boolean; // Beacon lights
+  LIGHT_STROBE_ON?: boolean; // Strobe lights
+  LIGHT_TAXI_ON?: boolean;  // Taxi lights
+  LIGHT_LANDING_ON?: boolean; // Landing lights
+  FLAPS_HANDLE_INDEX?: number; // Flaps handle position index
+  TRAILING_EDGE_FLAPS_LEFT_ANGLE?: number;  // degrees
+  TRAILING_EDGE_FLAPS_RIGHT_ANGLE?: number; // degrees
+  GEAR_HANDLE_POSITION?: number; // 0=down, 1=up
+  GEAR_CENTER_POSITION?: number; // 0=down, 1=up
+  GEAR_LEFT_POSITION?: number; // 0=down, 1=up
+  GEAR_RIGHT_POSITION?: number; // 0=down, 1=up
+  SPOILERS_HANDLE_POSITION?: number; // 0=down, 1=up
   
   // Engine data
-  GENERAL_ENG_RPM?: number; // RPM
+  /* GENERAL_ENG_RPM?: number; // RPM
   GENERAL_ENG_THROTTLE_LEVER_POSITION?: number; // percent (0-100)
   GENERAL_ENG_MIXTURE_LEVER_POSITION?: number; // percent (0-100)
   ENG_FUEL_FLOW_GPH?: number; // gallons per hour
@@ -43,7 +56,7 @@ export interface AircraftData {
   // Additional flight data
   KOHLSMAN_SETTING_HG?: number; // inches of mercury
   WISKEY_COMPASS_INDICATION_DEGREES?: number; // degrees
-  
+  */
   // Extensible: Add any additional properties as needed
   [key: string]: number | boolean | string | undefined;
 }

@@ -44,8 +44,8 @@ const server = new AviaConnectorServer({
   
   onAircraftData: (data) => {
     console.log(`\n📊 Aircraft Data:`);
-    console.log(`  TITLE: ${data.AIRCRAFT_MODEL}`);
-    console.log(`  ICAO: ${data.AIRCRAFT_TYPE}`);
+    console.log(`  TITLE: ${data.TITLE}`);
+    console.log(`  ICAO: ${data.ATC_MODEL}`);
     console.log(`  Altitude: ${data.PLANE_ALTITUDE?.toFixed(0)} ft`);
     console.log(`  Position: ${data.PLANE_LATITUDE?.toFixed(6)}°, ${data.PLANE_LONGITUDE?.toFixed(6)}°`);
     console.log(`  Airspeed indicated: ${data.AIRSPEED_INDICATED?.toFixed(0)} kts`);
@@ -53,6 +53,18 @@ const server = new AviaConnectorServer({
     console.log(`  Vertical Speed: ${data.VERTICAL_SPEED?.toFixed(0)} fpm`);
     console.log(`  G Force: ${data.G_FORCE?.toFixed(2)} G`);
     console.log(`  On Ground: ${data.SIM_ON_GROUND ? 'Yes' : 'No'}`);
+    console.log(`  Flaps Angle: ${data.TRAILING_EDGE_FLAPS_LEFT_ANGLE?.toFixed(1)}°`);
+    console.log(`  Gear Position: ${data.GEAR_HANDLE_POSITION === 0 ? 'Down' : data.GEAR_HANDLE_POSITION === 1 ? 'Up' : 'Transitioning'}`);
+    console.log(`  Lights: Nav ${data.LIGHT_NAV_ON ? 'On' : 'Off'}, Beacon ${data.LIGHT_BEACON_ON ? 'On' : 'Off'}, Strobe ${data.LIGHT_STROBE_ON ? 'On' : 'Off'}, Taxi ${data.LIGHT_TAXI_ON ? 'On' : 'Off'}, Landing ${data.LIGHT_LANDING_ON ? 'On' : 'Off'}`);
+    console.log(`  FLAPS_HANDLE_INDEX: ${data.FLAPS_HANDLE_INDEX}`);
+    console.log(`  TRAILING_EDGE_FLAPS_LEFT_ANGLE: ${data.TRAILING_EDGE_FLAPS_LEFT_ANGLE}`);
+    console.log(`  TRAILING_EDGE_FLAPS_RIGHT_ANGLE: ${data.TRAILING_EDGE_FLAPS_RIGHT_ANGLE}`);
+    console.log(`  GEAR_HANDLE_POSITION: ${data.GEAR_HANDLE_POSITION}`);
+    console.log(`  GEAR_CENTER_POSITION: ${data.GEAR_CENTER_POSITION}`);
+    console.log(`  GEAR_LEFT_POSITION: ${data.GEAR_LEFT_POSITION}`);
+    console.log(`  GEAR_RIGHT_POSITION: ${data.GEAR_RIGHT_POSITION}`);
+    console.log(`  SPOILERS_HANDLE_POSITION: ${data.SPOILERS_HANDLE_POSITION}`);
+    
   },
   
   onError: (error) => {
