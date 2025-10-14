@@ -1,5 +1,5 @@
 import { WebSocketServer, WebSocket } from "ws";
-import type { AircraftData, MessageEnvelope, SimulatorStatus } from "../types";
+import type { AircraftData, MessageEnvelope, SimulatorStatus, PongResponse } from "../types";
 
 export interface AviaConnectorServerOptions {
   port: number;
@@ -32,6 +32,11 @@ export interface AviaConnectorServerOptions {
   onSimulatorStatus?: (status: SimulatorStatus) => void;
   
   /**
+   * Callback when pong response is received
+   */
+  onPong?: (response: PongResponse) => void;
+  
+  /**
    * Callback for errors
    */
   onError?: (error: Error) => void;
@@ -54,6 +59,7 @@ export class AviaConnectorServer {
   private readonly onDisconnect?: () => void;
   private readonly onAircraftData?: (data: AircraftData) => void;
   private readonly onSimulatorStatus?: (status: SimulatorStatus) => void;
+  private readonly onPong?: (response: PongResponse) => void;
   private readonly onError?: (error: Error) => void;
 
   constructor(opts: AviaConnectorServerOptions) {
@@ -62,6 +68,7 @@ export class AviaConnectorServer {
     this.onDisconnect = opts.onDisconnect;
     this.onAircraftData = opts.onAircraftData;
     this.onSimulatorStatus = opts.onSimulatorStatus;
+    this.onPong = opts.onPong;
     this.onError = opts.onError;
 
     const host = opts.host ?? "0.0.0.0";
@@ -181,6 +188,13 @@ export class AviaConnectorServer {
       }
     }
     
+    // Handle pong response
+    else if (type === "pong") {
+      if (!data) return;
+      const pongData = data as PongResponse;
+      this.onPong?.(pongData);
+    }
+    
     // Handle errors
     else if (type === "Error" || type === "error") {
       const errorMsg = typeof data === "string" ? data : (data as any)?.message ?? "Unknown error";
@@ -228,6 +242,16 @@ export class AviaConnectorServer {
       type: "request",
       data: { type: "AircraftData" },
       ts: Date.now()
+    });
+  }
+
+  /**
+   * Send a ping request to AviaConnector
+   * Response will be received via onPong callback
+   */
+  ping(): boolean {
+    return this.send({
+      type: "ping"
     });
   }
 

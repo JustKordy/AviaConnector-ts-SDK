@@ -13,6 +13,11 @@ const server = new AviaConnectorServer({
   onConnection: () => {
     console.log(`✅ AviaConnector connected!`);
     
+    // Send a ping to detect simulator type
+    setInterval(() => {
+      server.ping();
+    }, 3000);
+    
     // Request aircraft data every second
     setInterval(() => {
       if (server.isSimulatorConnected()) {
@@ -31,6 +36,10 @@ const server = new AviaConnectorServer({
     } else {
       console.log(`🎮 Simulator disconnected`);
     }
+  },
+  
+  onPong: (response) => {
+    console.log(`🏓 Pong received! Simulator type: ${JSON.stringify(response)}`);
   },
   
   onAircraftData: (data) => {

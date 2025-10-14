@@ -55,3 +55,11 @@ export interface SimulatorStatus {
   connected: boolean;
   simulator?: "MSFS" | "P3D" | "X-Plane" | string;
 }
+/**
+ * Pong response data from ping request
+ */
+export interface PongResponse {
+ payload: {
+   simulator: 'MSFS' | 'P3DV5' | string;
+ }
+}
